@@ -39,6 +39,13 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
     super.initState();
     _songsFuture = _loadSongs();
     _initAudioSession();
+    
+    // Add this listener
+    _audioPlayer.playerStateStream.listen((playerState) {
+      setState(() {
+        _isPlaying = playerState.playing;
+      });
+    });
   }
 
   Future<List<String>> _loadSongs() async {
@@ -146,7 +153,7 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
                       } else {
                         await _audioPlayer.play();
                       }
-                      setState(() => _isPlaying = !_isPlaying);
+                      // Remove the setState from here
                     },
                   ),
                   IconButton(
