@@ -34,6 +34,7 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
   late Future<List<String>> _songsFuture;
   List<String> _songs = [];
   int? _currentIndex; // Add this variable
+  bool _isShuffled = false; // Add this variable
 
   @override
   void initState() {
@@ -51,6 +52,12 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
     _audioPlayer.playerStateStream.listen((playerState) {
       setState(() {
         _isPlaying = playerState.playing;
+      });
+    });
+
+    _audioPlayer.shuffleModeEnabledStream.listen((enabled) {
+      setState(() {
+        _isShuffled = enabled;
       });
     });
   }
@@ -180,6 +187,13 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
                   IconButton(
                     icon: const Icon(Icons.skip_next, size: 40),
                     onPressed: () => _audioPlayer.seekToNext(),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.shuffle),
+                    color: _isShuffled ? Colors.green : null,
+                    onPressed: () async {
+                      await _audioPlayer.setShuffleModeEnabled(!_isShuffled);
+                    },
                   ),
                 ],
               ),
