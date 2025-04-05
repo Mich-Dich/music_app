@@ -14,7 +14,25 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Music App',
-      theme: ThemeData.dark(),
+      // Update the ThemeData in MyApp widget
+      theme: ThemeData.dark().copyWith(
+        colorScheme: const ColorScheme.dark(
+          primary: Colors.greenAccent,
+          secondary: Colors.green,
+          background: Colors.black,
+          surface: Color(0xFF121212),
+        ),
+        textTheme: const TextTheme(
+          titleLarge: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          bodyLarge: TextStyle(fontSize: 18),
+        ),
+        sliderTheme: SliderThemeData(
+          activeTrackColor: const Color.fromARGB(255, 0, 209, 63),
+          inactiveTrackColor: Colors.grey[800],
+          thumbColor: const Color.fromARGB(255, 0, 209, 17),
+          overlayColor: const Color.fromARGB(255, 0, 231, 0).withOpacity(0.2),
+        ),
+      ),
       home: const MusicPlayerScreen(),
     );
   }
@@ -145,47 +163,92 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: Colors.black,
+        elevation: 0,
         title: _currentIndex != null
             ? Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween, // Add this
                 children: [
-                  // Title on the left
-                  Text(
-                    _getSongTitle(_songs[_currentIndex!]),
-                    style: const TextStyle(fontSize: 22),
+                  Expanded(
+                    child: Text(
+                      _getSongTitle(_songs[_currentIndex!]),
+                      style: Theme.of(context).textTheme.titleLarge!.copyWith(
+                            color: Colors.greenAccent,
+                          ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                  // Score controls on the right
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Text('-', 
-                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                        padding: EdgeInsets.zero, // Reduce padding
-                        constraints: BoxConstraints(), // Remove button constraints
-                        onPressed: () {
-                          final songPath = _songs[_currentIndex!];
-                          final currentScore = _songScores[songPath] ?? 0;
-                          _updateScore(songPath, currentScore - 1);
-                        },
-                      ),
-                      Text(
-                        '${_songScores[_songs[_currentIndex!]] ?? 0}',
-                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w500),
-                      ),
-                      IconButton(
-                        icon: const Text('+', 
-                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                        padding: EdgeInsets.zero, // Reduce padding
-                        constraints: BoxConstraints(), // Remove button constraints
-                        onPressed: () {
-                          final songPath = _songs[_currentIndex!];
-                          final currentScore = _songScores[songPath] ?? 0;
-                          _updateScore(songPath, currentScore + 1);
-                        },
-                      ),
-                    ],
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.greenAccent.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.remove, size: 20),
+                          color: Colors.greenAccent,
+                          onPressed: () {
+                            final songPath = _songs[_currentIndex!];
+                            final currentScore = _songScores[songPath] ?? 0;
+                            _updateScore(songPath, currentScore - 1);
+                          },
+                        ),
+                        Text('${_songScores[_songs[_currentIndex!]] ?? 0}',
+                          style: const TextStyle(fontSize: 20, color: Colors.white)),
+                        IconButton(
+                          icon: const Icon(Icons.add, size: 20),
+                          color: Colors.greenAccent,
+                          onPressed: () {
+                            final songPath = _songs[_currentIndex!];
+                            final currentScore = _songScores[songPath] ?? 0;
+                            _updateScore(songPath, currentScore + 1);
+                          },
+                        ),
+                      ],
+                    ),
                   ),
+
+
+                  
+                  // // Title on the left
+                  // Text(
+                  //   _getSongTitle(_songs[_currentIndex!]),
+                  //   style: const TextStyle(fontSize: 22),
+                  // ),
+                  // // Score controls on the right
+                  // Row(
+                  //   mainAxisSize: MainAxisSize.min,
+                  //   children: [
+                  //     IconButton(
+                  //       icon: const Text('-', 
+                  //         style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  //       padding: EdgeInsets.zero, // Reduce padding
+                  //       constraints: BoxConstraints(), // Remove button constraints
+                  //       onPressed: () {
+                  //         final songPath = _songs[_currentIndex!];
+                  //         final currentScore = _songScores[songPath] ?? 0;
+                  //         _updateScore(songPath, currentScore - 1);
+                  //       },
+                  //     ),
+                  //     Text(
+                  //       '${_songScores[_songs[_currentIndex!]] ?? 0}',
+                  //       style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w500),
+                  //     ),
+                  //     IconButton(
+                  //       icon: const Text('+', 
+                  //         style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  //       padding: EdgeInsets.zero, // Reduce padding
+                  //       constraints: BoxConstraints(), // Remove button constraints
+                  //       onPressed: () {
+                  //         final songPath = _songs[_currentIndex!];
+                  //         final currentScore = _songScores[songPath] ?? 0;
+                  //         _updateScore(songPath, currentScore + 1);
+                  //       },
+                  //     ),
+                  //   ],
+                  // ),
                 ],
               )
             : const Text('Music Player', style: TextStyle(fontSize: 25)),
@@ -228,7 +291,7 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
                 children: [
                   IconButton(
                     icon: const Icon(Icons.repeat),
-                    color: _isLooped ? Colors.green : null,
+                    color: _isLooped ? const Color.fromARGB(255, 0, 255, 8) : null,
                     onPressed: () async {
                       final newMode = _isLooped ? LoopMode.off : LoopMode.all;
                       await _audioPlayer.setLoopMode(newMode);
@@ -254,7 +317,7 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
                   ),
                   IconButton(
                     icon: const Icon(Icons.shuffle),
-                    color: _isShuffled ? Colors.green : null,
+                    color: _isShuffled ? const Color.fromARGB(255, 0, 255, 8) : null,
                     onPressed: () async {
                       await _audioPlayer.setShuffleModeEnabled(!_isShuffled);
                     },
@@ -268,23 +331,52 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
                     String songPath = _songs[index];
                     int score = _songScores[songPath] ?? 0;
                     return ListTile(
+                      tileColor: _currentIndex == index 
+                          ? Colors.greenAccent.withOpacity(0.1)
+                          : null,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
+                      ),
                       title: Row(
                         children: [
                           Expanded(
-                            child: Text(_getSongTitle(songPath)),
+                            child: Text(
+                              _getSongTitle(songPath),
+                              style: TextStyle(
+                                color: _currentIndex == index 
+                                    ? Colors.greenAccent 
+                                    : Colors.white,
+                                fontWeight: _currentIndex == index 
+                                    ? FontWeight.bold 
+                                    : FontWeight.normal,
+                              ),
+                            ),
                           ),
-                          IconButton(
-                            icon: const Text('-'),
-                            onPressed: () {
-                              _updateScore(songPath, score - 1);
-                            },
-                          ),
-                          Text(score.toString()),
-                          IconButton(
-                            icon: const Text('+'),
-                            onPressed: () {
-                              _updateScore(songPath, score + 1);
-                            },
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.greenAccent.withOpacity(0),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.remove, size: 18),
+                                  color: Colors.greenAccent,
+                                  onPressed: () { 
+                                    _updateScore(songPath, score - 1);
+                                  },
+                                ),
+                                Text(score.toString(),
+                                    style: const TextStyle(color: Colors.white)),
+                                IconButton(
+                                  icon: const Icon(Icons.add, size: 18),
+                                  color: Colors.greenAccent,
+                                  onPressed: () { 
+                                    _updateScore(songPath, score + 1);
+                                  },
+                                ),
+                              ],
+                            ),
                           ),
                         ],
                       ),
