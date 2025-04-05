@@ -3,9 +3,29 @@ import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:audio_service/audio_service.dart';
+import 'audio_handler.dart';
 import 'dart:convert';
 
-void main() => runApp(const MyApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final audioPlayer = await setupAudioPlayer();
+  await AudioService.init(
+    builder: () => AudioPlayerHandler(audioPlayer),
+    config: const AudioServiceConfig(
+      androidNotificationChannelId: 'com.yourcompany.yourapp.channel.audio',
+      androidNotificationChannelName: 'Music playback',
+      androidNotificationOngoing: true,
+      androidStopForegroundOnPause: true,
+    ),
+  );
+  runApp(const MyApp());
+}
+
+Future<AudioPlayer> setupAudioPlayer() async {
+  final player = AudioPlayer();
+  return player;
+}
 
 class MyApp extends StatelessWidget {
   const MyApp({Key? key}) : super(key: key);
@@ -14,7 +34,6 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Music App',
-      // Update the ThemeData in MyApp widget
       theme: ThemeData.dark().copyWith(
         colorScheme: const ColorScheme.dark(
           primary: Colors.greenAccent,
@@ -46,7 +65,7 @@ class MusicPlayerScreen extends StatefulWidget {
 }
 
 class MusicPlayerScreenState extends State<MusicPlayerScreen> {
-  final AudioPlayer _audioPlayer = AudioPlayer();
+  final AudioPlayer AudioService = AudioPlayer();
   bool _isPlaying = false;
   Duration _duration = Duration.zero;
   Duration _position = Duration.zero;
@@ -66,25 +85,25 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
     _songsFuture = _loadSongs();
     _initAudioSession();
     
-    _audioPlayer.currentIndexStream.listen((index) {
+    AudioService.currentIndexStream.listen((index) {
       setState(() {
         _currentIndex = index;
       });
     });
 
-    _audioPlayer.playerStateStream.listen((playerState) {
+    AudioService.playerStateStream.listen((playerState) {
       setState(() {
         _isPlaying = playerState.playing;
       });
     });
 
-    _audioPlayer.shuffleModeEnabledStream.listen((enabled) {
+    AudioService.shuffleModeEnabledStream.listen((enabled) {
       setState(() {
         _isShuffled = enabled;
       });
     });
     
-    _audioPlayer.loopModeStream.listen((mode) {
+    AudioService.loopModeStream.listen((mode) {
       setState(() {
         _isLooped = mode == LoopMode.all;
       });
@@ -132,13 +151,26 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
 
   Future<void> _initAudioSession() async {
     final session = await AudioSession.instance;
-    await session.configure(AudioSessionConfiguration.music());
+    await session.configure(AudioSessionConfiguration(
+      avAudioSessionCategory: AVAudioSessionCategory.playback,
+      avAudioSessionCategoryOptions: AVAudioSessionCategoryOptions.mixWithOthers,
+      avAudioSessionMode: AVAudioSessionMode.defaultMode,
+      avAudioSessionRouteSharingPolicy: AVAudioSessionRouteSharingPolicy.defaultPolicy,
+      avAudioSessionSetActiveOptions: AVAudioSessionSetActiveOptions.none,
+      androidAudioAttributes: const AndroidAudioAttributes(
+        contentType: AndroidAudioContentType.music,
+        flags: AndroidAudioFlags.none,
+        usage: AndroidAudioUsage.media,
+      ),
+      androidAudioFocusGainType: AndroidAudioFocusGainType.gain,
+      androidWillPauseWhenDucked: true,
+    ));
   }
 
   Future<void> _setupPlaylist() async {
-    await _audioPlayer.setShuffleModeEnabled(true);  // Add this
-    await _audioPlayer.setLoopMode(LoopMode.all);    // Changed from LoopMode.off
-    await _audioPlayer.setAudioSource(
+    await AudioService.setShuffleModeEnabled(true);  // Add this
+    await AudioService.setLoopMode(LoopMode.all);    // Changed from LoopMode.off
+    await AudioService.setAudioSource(
       ConcatenatingAudioSource(
         children: _songs.map((song) => AudioSource.asset(song)).toList(),
       ),
@@ -147,7 +179,7 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
 
   @override
   void dispose() {
-    _audioPlayer.dispose();
+    AudioService.dispose();
     super.dispose();
   }
 
@@ -209,46 +241,6 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
                       ],
                     ),
                   ),
-
-
-                  
-                  // // Title on the left
-                  // Text(
-                  //   _getSongTitle(_songs[_currentIndex!]),
-                  //   style: const TextStyle(fontSize: 22),
-                  // ),
-                  // // Score controls on the right
-                  // Row(
-                  //   mainAxisSize: MainAxisSize.min,
-                  //   children: [
-                  //     IconButton(
-                  //       icon: const Text('-', 
-                  //         style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                  //       padding: EdgeInsets.zero, // Reduce padding
-                  //       constraints: BoxConstraints(), // Remove button constraints
-                  //       onPressed: () {
-                  //         final songPath = _songs[_currentIndex!];
-                  //         final currentScore = _songScores[songPath] ?? 0;
-                  //         _updateScore(songPath, currentScore - 1);
-                  //       },
-                  //     ),
-                  //     Text(
-                  //       '${_songScores[_songs[_currentIndex!]] ?? 0}',
-                  //       style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w500),
-                  //     ),
-                  //     IconButton(
-                  //       icon: const Text('+', 
-                  //         style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                  //       padding: EdgeInsets.zero, // Reduce padding
-                  //       constraints: BoxConstraints(), // Remove button constraints
-                  //       onPressed: () {
-                  //         final songPath = _songs[_currentIndex!];
-                  //         final currentScore = _songScores[songPath] ?? 0;
-                  //         _updateScore(songPath, currentScore + 1);
-                  //       },
-                  //     ),
-                  //   ],
-                  // ),
                 ],
               )
             : const Text('Music Player', style: TextStyle(fontSize: 25)),
@@ -267,11 +259,11 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
           return Column(
             children: [
               StreamBuilder<Duration?>(
-                stream: _audioPlayer.positionStream,
+                stream: AudioService.positionStream,
                 builder: (context, snapshot) {
                   _position = snapshot.data ?? Duration.zero;
                   return StreamBuilder<Duration?>(
-                    stream: _audioPlayer.durationStream,
+                    stream: AudioService.durationStream,
                     builder: (context, snapshot) {
                       _duration = snapshot.data ?? Duration.zero;
                       return Slider(
@@ -279,7 +271,7 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
                         max: _duration.inSeconds.toDouble(),
                         value: _position.inSeconds.toDouble(),
                         onChanged: (value) async {
-                          await _audioPlayer.seek(Duration(seconds: value.toInt()));
+                          await AudioService.seek(Duration(seconds: value.toInt()));
                         },
                       );
                     },
@@ -294,32 +286,32 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
                     color: _isLooped ? const Color.fromARGB(255, 0, 255, 8) : null,
                     onPressed: () async {
                       final newMode = _isLooped ? LoopMode.off : LoopMode.all;
-                      await _audioPlayer.setLoopMode(newMode);
+                      await AudioService.setLoopMode(newMode);
                     },
                   ),
                   IconButton(
                     icon: const Icon(Icons.skip_previous, size: 40),
-                    onPressed: () => _audioPlayer.seekToPrevious(),
+                    onPressed: () => AudioService.seekToPrevious(),
                   ),
                   IconButton(
                     icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow, size: 50),
                     onPressed: () async {
                       if (_isPlaying) {
-                        await _audioPlayer.pause();
+                        await AudioService.pause();
                       } else {
-                        await _audioPlayer.play();
+                        await AudioService.play();
                       }
                     },
                   ),
                   IconButton(
                     icon: const Icon(Icons.skip_next, size: 40),
-                    onPressed: () => _audioPlayer.seekToNext(),
+                    onPressed: () => AudioService.seekToNext(),
                   ),
                   IconButton(
                     icon: const Icon(Icons.shuffle),
                     color: _isShuffled ? const Color.fromARGB(255, 0, 255, 8) : null,
                     onPressed: () async {
-                      await _audioPlayer.setShuffleModeEnabled(!_isShuffled);
+                      await AudioService.setShuffleModeEnabled(!_isShuffled);
                     },
                   ),
                 ],
@@ -382,10 +374,10 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
                       ),
                       onTap: () async {
                         if (_isPlaying) {
-                          await _audioPlayer.stop();
+                          await AudioService.stop();
                         }
-                        await _audioPlayer.seek(Duration.zero, index: index);
-                        await _audioPlayer.play();
+                        await AudioService.seek(Duration.zero, index: index);
+                        await AudioService.play();
                       },
                     );
                   },

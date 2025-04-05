@@ -30,9 +30,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  just_audio: ^0.9.34  # For audio playback
   audio_service: ^0.18.9  # For media controls and background playback
-  audio_session: ^0.1.13 # Manage audio focus
+  audio_session: ^0.1.15  # Already in your code
+  just_audio: ^0.9.34  # For audio playback
   provider: ^6.0.5     # For state management
   shared_preferences: ^2.2.2
 
