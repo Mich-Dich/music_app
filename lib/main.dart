@@ -141,17 +141,6 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
 
           return Column(
             children: [
-              // Album Art
-              Container(
-                height: 300,
-                decoration: const BoxDecoration(
-                  image: DecorationImage(
-                    image: AssetImage('assets/album_art.jpg'),
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              ),
-              // ... [Keep the rest of your existing UI elements] ...
               // Progress Bar
               StreamBuilder<Duration?>(
                 stream: _audioPlayer.positionStream,
@@ -220,7 +209,15 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
                   itemBuilder: (context, index) => ListTile(
                     title: Text(_songs[index].split('/').last),
                     subtitle: Text('Artist ${index + 1}'),
-                    onTap: () => _audioPlayer.seek(Duration.zero, index: index),
+                    onTap: () async {
+                      // Stop if currently playing
+                      if (_isPlaying) {
+                        await _audioPlayer.stop();
+                      }
+                      // Seek to the selected song and play
+                      await _audioPlayer.seek(Duration.zero, index: index);
+                      await _audioPlayer.play();
+                    },
                   ),
                 ),
               ),
