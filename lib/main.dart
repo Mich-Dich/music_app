@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:audio_session/audio_session.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
 void main() => runApp(const MyApp());
@@ -33,17 +34,20 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
   Duration _position = Duration.zero;
   late Future<List<String>> _songsFuture;
   List<String> _songs = [];
-  int? _currentIndex; // Add this variable
-  bool _isShuffled = false; // Add this variable
-  bool _isLooped = false; // Add this variable
+  int? _currentIndex;
+  bool _isShuffled = true;
+  bool _isLooped = true;
+  late SharedPreferences _prefs;
+  Map<String, int> _songScores = {};
 
   @override
   void initState() {
     super.initState();
+    _isShuffled = true;  // Add this
+    _isLooped = true;     // Add this
     _songsFuture = _loadSongs();
     _initAudioSession();
     
-    // Add this listener for current track index
     _audioPlayer.currentIndexStream.listen((index) {
       setState(() {
         _currentIndex = index;
@@ -67,25 +71,45 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
         _isLooped = mode == LoopMode.all;
       });
     });
-  
   }
 
   Future<List<String>> _loadSongs() async {
-    // Load asset manifest
     final manifestContent = await rootBundle.loadString('AssetManifest.json');
     final Map<String, dynamic> manifest = json.decode(manifestContent);
     
-    // Filter MP3 files from assets
     _songs = manifest.keys
         .where((path) => path.endsWith('.mp3') && path.startsWith('assets/'))
         .toList();
 
-    // Setup playlist if songs are found
     if (_songs.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _setupPlaylist());
     }
 
+    await _loadScores();
     return _songs;
+  }
+
+  Future<void> _loadScores() async {
+    _prefs = await SharedPreferences.getInstance();
+    String? scoresJson = _prefs.getString('songScores');
+    if (scoresJson != null) {
+      setState(() {
+        _songScores = Map<String, int>.from(json.decode(scoresJson));
+      });
+    }
+  }
+
+  Future<void> _saveScores() async {
+    String scoresJson = json.encode(_songScores);
+    await _prefs.setString('songScores', scoresJson);
+  }
+
+  void _updateScore(String songPath, int newScore) {
+    newScore = newScore.clamp(0, 9);
+    setState(() {
+      _songScores[songPath] = newScore;
+    });
+    _saveScores();
   }
 
   Future<void> _initAudioSession() async {
@@ -94,7 +118,8 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
   }
 
   Future<void> _setupPlaylist() async {
-    await _audioPlayer.setLoopMode(LoopMode.off);
+    await _audioPlayer.setShuffleModeEnabled(true);  // Add this
+    await _audioPlayer.setLoopMode(LoopMode.all);    // Changed from LoopMode.off
     await _audioPlayer.setAudioSource(
       ConcatenatingAudioSource(
         children: _songs.map((song) => AudioSource.asset(song)).toList(),
@@ -109,7 +134,6 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
   }
 
   String _getSongTitle(String filePath) {
-    // Remove path and extension, capitalize first letters
     final fileName = filePath.split('/').last.replaceAll('.mp3', '');
     return fileName
         .split('_')
@@ -141,7 +165,6 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
 
           return Column(
             children: [
-              // Progress Bar
               StreamBuilder<Duration?>(
                 stream: _audioPlayer.positionStream,
                 builder: (context, snapshot) {
@@ -162,7 +185,6 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
                   );
                 },
               ),
-              // Controls
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -186,7 +208,6 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
                       } else {
                         await _audioPlayer.play();
                       }
-                      // Remove the setState from here
                     },
                   ),
                   IconButton(
@@ -202,23 +223,42 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
                   ),
                 ],
               ),
-              // Song List
               Expanded(
                 child: ListView.builder(
                   itemCount: _songs.length,
-                  itemBuilder: (context, index) => ListTile(
-                    title: Text(_songs[index].split('/').last),
-                    subtitle: Text('Artist ${index + 1}'),
-                    onTap: () async {
-                      // Stop if currently playing
-                      if (_isPlaying) {
-                        await _audioPlayer.stop();
-                      }
-                      // Seek to the selected song and play
-                      await _audioPlayer.seek(Duration.zero, index: index);
-                      await _audioPlayer.play();
-                    },
-                  ),
+                  itemBuilder: (context, index) {
+                    String songPath = _songs[index];
+                    int score = _songScores[songPath] ?? 0;
+                    return ListTile(
+                      title: Row(
+                        children: [
+                          Expanded(
+                            child: Text(_getSongTitle(songPath)),
+                          ),
+                          IconButton(
+                            icon: const Text('-'),
+                            onPressed: () {
+                              _updateScore(songPath, score - 1);
+                            },
+                          ),
+                          Text(score.toString()),
+                          IconButton(
+                            icon: const Text('+'),
+                            onPressed: () {
+                              _updateScore(songPath, score + 1);
+                            },
+                          ),
+                        ],
+                      ),
+                      onTap: () async {
+                        if (_isPlaying) {
+                          await _audioPlayer.stop();
+                        }
+                        await _audioPlayer.seek(Duration.zero, index: index);
+                        await _audioPlayer.play();
+                      },
+                    );
+                  },
                 ),
               ),
             ],
