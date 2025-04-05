@@ -33,6 +33,7 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
   Duration _position = Duration.zero;
   late Future<List<String>> _songsFuture;
   List<String> _songs = [];
+  int? _currentIndex; // Add this variable
 
   @override
   void initState() {
@@ -40,7 +41,13 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
     _songsFuture = _loadSongs();
     _initAudioSession();
     
-    // Add this listener
+    // Add this listener for current track index
+    _audioPlayer.currentIndexStream.listen((index) {
+      setState(() {
+        _currentIndex = index;
+      });
+    });
+
     _audioPlayer.playerStateStream.listen((playerState) {
       setState(() {
         _isPlaying = playerState.playing;
@@ -86,11 +93,25 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
     super.dispose();
   }
 
+  String _getSongTitle(String filePath) {
+    // Remove path and extension, capitalize first letters
+    final fileName = filePath.split('/').last.replaceAll('.mp3', '');
+    return fileName
+        .split('_')
+        .map((word) => word[0].toUpperCase() + word.substring(1))
+        .join(' ');
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Music Player'),
+        title: Text(
+          _currentIndex != null 
+              ? _getSongTitle(_songs[_currentIndex!])
+              : 'Music Player',
+          style: const TextStyle(fontSize: 25),
+        ),
       ),
       body: FutureBuilder<List<String>>(
         future: _songsFuture,
