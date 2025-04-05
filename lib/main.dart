@@ -35,6 +35,7 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
   List<String> _songs = [];
   int? _currentIndex; // Add this variable
   bool _isShuffled = false; // Add this variable
+  bool _isLooped = false; // Add this variable
 
   @override
   void initState() {
@@ -60,6 +61,13 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
         _isShuffled = enabled;
       });
     });
+    
+    _audioPlayer.loopModeStream.listen((mode) {
+      setState(() {
+        _isLooped = mode == LoopMode.all;
+      });
+    });
+  
   }
 
   Future<List<String>> _loadSongs() async {
@@ -169,6 +177,14 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
+                  IconButton(
+                    icon: const Icon(Icons.repeat),
+                    color: _isLooped ? Colors.green : null,
+                    onPressed: () async {
+                      final newMode = _isLooped ? LoopMode.off : LoopMode.all;
+                      await _audioPlayer.setLoopMode(newMode);
+                    },
+                  ),
                   IconButton(
                     icon: const Icon(Icons.skip_previous, size: 40),
                     onPressed: () => _audioPlayer.seekToPrevious(),
