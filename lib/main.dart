@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:audio_session/audio_session.dart';
+import 'dart:convert';
 
 void main() => runApp(const MyApp());
 
@@ -29,16 +31,32 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
   bool _isPlaying = false;
   Duration _duration = Duration.zero;
   Duration _position = Duration.zero;
-
-  final List<String> _songs = [
-    'assets/gorila_000.mp3',
-  ];
+  late Future<List<String>> _songsFuture;
+  List<String> _songs = [];
 
   @override
   void initState() {
     super.initState();
+    _songsFuture = _loadSongs();
     _initAudioSession();
-    _setupPlaylist();
+  }
+
+  Future<List<String>> _loadSongs() async {
+    // Load asset manifest
+    final manifestContent = await rootBundle.loadString('AssetManifest.json');
+    final Map<String, dynamic> manifest = json.decode(manifestContent);
+    
+    // Filter MP3 files from assets
+    _songs = manifest.keys
+        .where((path) => path.endsWith('.mp3') && path.startsWith('assets/'))
+        .toList();
+
+    // Setup playlist if songs are found
+    if (_songs.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _setupPlaylist());
+    }
+
+    return _songs;
   }
 
   Future<void> _initAudioSession() async {
@@ -67,94 +85,90 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
       appBar: AppBar(
         title: const Text('Music Player'),
       ),
-      body: Column(
-        children: [
-          // Album Art
-          Container(
-            height: 300,
-            decoration: const BoxDecoration(
-              image: DecorationImage(
-                image: AssetImage('assets/album_art.jpg'),
-                fit: BoxFit.cover,
-              ),
-            ),
-          ),
+      body: FutureBuilder<List<String>>(
+        future: _songsFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator());
+          }
           
-          // Song Info
-          const Padding(
-            padding: EdgeInsets.all(16.0),
-            child: Column(
-              children: [
-                Text(
-                  'Song Title',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          if (snapshot.hasError || _songs.isEmpty) {
+            return const Center(child: Text('No songs found in assets folder'));
+          }
+
+          return Column(
+            children: [
+              // Album Art
+              Container(
+                height: 300,
+                decoration: const BoxDecoration(
+                  image: DecorationImage(
+                    image: AssetImage('assets/album_art.jpg'),
+                    fit: BoxFit.cover,
+                  ),
                 ),
-                SizedBox(height: 8),
-                Text('Artist Name', style: TextStyle(fontSize: 18)),
-              ],
-            ),
-          ),
-          
-          // Progress Bar
-          StreamBuilder<Duration?>(
-            stream: _audioPlayer.positionStream,
-            builder: (context, snapshot) {
-              _position = snapshot.data ?? Duration.zero;
-              return StreamBuilder<Duration?>(
-                stream: _audioPlayer.durationStream,
+              ),
+              // ... [Keep the rest of your existing UI elements] ...
+              // Progress Bar
+              StreamBuilder<Duration?>(
+                stream: _audioPlayer.positionStream,
                 builder: (context, snapshot) {
-                  _duration = snapshot.data ?? Duration.zero;
-                  return Slider(
-                    min: 0,
-                    max: _duration.inSeconds.toDouble(),
-                    value: _position.inSeconds.toDouble(),
-                    onChanged: (value) async {
-                      await _audioPlayer.seek(Duration(seconds: value.toInt()));
+                  _position = snapshot.data ?? Duration.zero;
+                  return StreamBuilder<Duration?>(
+                    stream: _audioPlayer.durationStream,
+                    builder: (context, snapshot) {
+                      _duration = snapshot.data ?? Duration.zero;
+                      return Slider(
+                        min: 0,
+                        max: _duration.inSeconds.toDouble(),
+                        value: _position.inSeconds.toDouble(),
+                        onChanged: (value) async {
+                          await _audioPlayer.seek(Duration(seconds: value.toInt()));
+                        },
+                      );
                     },
                   );
                 },
-              );
-            },
-          ),
-          
-          // Controls
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.skip_previous, size: 40),
-                onPressed: () => _audioPlayer.seekToPrevious(),
               ),
-              IconButton(
-                icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow, size: 50),
-                onPressed: () async {
-                  if (_isPlaying) {
-                    await _audioPlayer.pause();
-                  } else {
-                    await _audioPlayer.play();
-                  }
-                  setState(() => _isPlaying = !_isPlaying);
-                },
+              // Controls
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.skip_previous, size: 40),
+                    onPressed: () => _audioPlayer.seekToPrevious(),
+                  ),
+                  IconButton(
+                    icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow, size: 50),
+                    onPressed: () async {
+                      if (_isPlaying) {
+                        await _audioPlayer.pause();
+                      } else {
+                        await _audioPlayer.play();
+                      }
+                      setState(() => _isPlaying = !_isPlaying);
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.skip_next, size: 40),
+                    onPressed: () => _audioPlayer.seekToNext(),
+                  ),
+                ],
               ),
-              IconButton(
-                icon: const Icon(Icons.skip_next, size: 40),
-                onPressed: () => _audioPlayer.seekToNext(),
+              // Song List
+              Expanded(
+                child: ListView.builder(
+                  itemCount: _songs.length,
+                  itemBuilder: (context, index) => ListTile(
+                    title: Text(_songs[index].split('/').last),
+                    subtitle: Text('Artist ${index + 1}'),
+                    onTap: () => _audioPlayer.seek(Duration.zero, index: index),
+                  ),
+                ),
               ),
             ],
-          ),
-          
-          // Song List
-          Expanded(
-            child: ListView.builder(
-              itemCount: _songs.length,
-              itemBuilder: (context, index) => ListTile(
-                title: Text('Song ${index + 1}'),
-                subtitle: Text('Artist ${index + 1}'),
-                onTap: () => _audioPlayer.seek(Duration.zero, index: index),
-              ),
-            ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
