@@ -145,6 +145,46 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
     );
   }
 
+  Future<void> _sortSongsByScore() async {
+    String? currentSongPath;
+    bool wasPlaying = _isPlaying;
+    if (_currentIndex != null && _currentIndex! < _songs.length) {
+      currentSongPath = _songs[_currentIndex!];
+    }
+
+    await _audioPlayer.pause();
+
+    List<String> sortedSongs = List.from(_songs);
+    sortedSongs.sort((a, b) {
+      int scoreA = _songScores[a] ?? 0;
+      int scoreB = _songScores[b] ?? 0;
+      return scoreB.compareTo(scoreA); // Descending order
+    });
+
+    setState(() {
+      _songs = sortedSongs;
+    });
+
+    await _audioPlayer.setShuffleModeEnabled(false);
+    await _audioPlayer.setAudioSource(
+      ConcatenatingAudioSource(
+        children: _songs.map((song) => AudioSource.asset(song)).toList(),
+      ),
+    );
+
+    if (currentSongPath != null) {
+      int newIndex = _songs.indexOf(currentSongPath);
+      if (newIndex != -1) {
+        await _audioPlayer.seek(Duration.zero, index: newIndex);
+        if (wasPlaying) {
+          await _audioPlayer.play();
+        }
+      }
+    }
+
+    setState(() {});
+  }
+
   @override
   void dispose() {
     _audioPlayer.dispose();
@@ -205,6 +245,11 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
                             final currentScore = _songScores[songPath] ?? 0;
                             _updateScore(songPath, currentScore + 1);
                           },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.sort),
+                          color: const Color.fromARGB(255, 0, 255, 34),
+                          onPressed: _sortSongsByScore,
                         ),
                       ],
                     ),
@@ -330,7 +375,7 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
                                       icon: const Icon(Icons.remove, size: 18),
                                       color: _currentIndex == index 
                                         ? const Color.fromARGB(255, 0, 255, 34) 
-                                        : Colors.greenAccent,
+                                        : const Color.fromARGB(125, 9, 255, 0),
                                       onPressed: () { 
                                         _updateScore(songPath, score - 1);
                                       },
@@ -341,7 +386,7 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
                                       icon: const Icon(Icons.add, size: 18),
                                       color: _currentIndex == index 
                                         ? const Color.fromARGB(255, 0, 255, 34) 
-                                        : Colors.greenAccent,
+                                        : const Color.fromARGB(125, 9, 255, 0),
                                       onPressed: () { 
                                         _updateScore(songPath, score + 1);
                                       },
