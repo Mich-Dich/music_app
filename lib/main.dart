@@ -8,7 +8,7 @@ import 'dart:convert';
 void main() => runApp(const MyApp());
 
 class MyApp extends StatelessWidget {
-  const MyApp({Key? key}) : super(key: key);
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -17,9 +17,8 @@ class MyApp extends StatelessWidget {
       // Update the ThemeData in MyApp widget
       theme: ThemeData.dark().copyWith(
         colorScheme: const ColorScheme.dark(
-          primary: Colors.greenAccent,
+          primary: Color.fromARGB(190, 0, 255, 0),
           secondary: Colors.green,
-          background: Colors.black,
           surface: Color(0xFF121212),
         ),
         textTheme: const TextTheme(
@@ -30,7 +29,7 @@ class MyApp extends StatelessWidget {
           activeTrackColor: const Color.fromARGB(255, 0, 209, 63),
           inactiveTrackColor: Colors.grey[800],
           thumbColor: const Color.fromARGB(255, 0, 209, 17),
-          overlayColor: const Color.fromARGB(255, 0, 231, 0).withOpacity(0.2),
+          overlayColor: const Color.fromARGB(55, 0, 231, 0),
         ),
       ),
       home: const MusicPlayerScreen(),
@@ -39,7 +38,7 @@ class MyApp extends StatelessWidget {
 }
 
 class MusicPlayerScreen extends StatefulWidget {
-  const MusicPlayerScreen({Key? key}) : super(key: key);
+  const MusicPlayerScreen({super.key});
 
   @override
   State<MusicPlayerScreen> createState() => MusicPlayerScreenState();
@@ -57,6 +56,7 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
   bool _isLooped = true;
   late SharedPreferences _prefs;
   Map<String, int> _songScores = {};
+  bool _sortAscending = false;
 
   @override
   void initState() {
@@ -146,6 +146,9 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
   }
 
   Future<void> _sortSongsByScore() async {
+    // Toggle the sort order each time the button is pressed.
+    _sortAscending = !_sortAscending;
+
     String? currentSongPath;
     bool wasPlaying = _isPlaying;
     if (_currentIndex != null && _currentIndex! < _songs.length) {
@@ -158,7 +161,10 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
     sortedSongs.sort((a, b) {
       int scoreA = _songScores[a] ?? 0;
       int scoreB = _songScores[b] ?? 0;
-      return scoreB.compareTo(scoreA); // Descending order
+      // Use ascending or descending based on the toggle:
+      return _sortAscending 
+          ? scoreA.compareTo(scoreB)
+          : scoreB.compareTo(scoreA);
     });
 
     setState(() {
@@ -220,7 +226,7 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
                   ),
                   Container(
                     decoration: BoxDecoration(
-                      color: const Color.fromARGB(255, 0, 0, 0).withOpacity(0.2),
+                      color: const Color.fromARGB(255, 0, 0, 0),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Row(
@@ -247,7 +253,9 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
                           },
                         ),
                         IconButton(
-                          icon: const Icon(Icons.sort),
+                          icon: Icon(
+                            _sortAscending ? Icons.arrow_upward : Icons.arrow_downward,
+                          ),
                           color: const Color.fromARGB(255, 0, 255, 34),
                           onPressed: _sortSongsByScore,
                         ),
@@ -343,7 +351,7 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
                         int score = _songScores[songPath] ?? 0;
                         return ListTile(
                           tileColor: _currentIndex == index 
-                              ? Colors.greenAccent.withOpacity(0.1)
+                              ? const Color.fromARGB(55, 0, 0, 0)
                               : null,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(15),
