@@ -167,20 +167,20 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
         elevation: 0,
         title: _currentIndex != null
             ? Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween, // Add this
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Expanded(
                     child: Text(
                       _getSongTitle(_songs[_currentIndex!]),
                       style: Theme.of(context).textTheme.titleLarge!.copyWith(
-                            color: Colors.greenAccent,
+                            color: const Color.fromARGB(255, 0, 255, 34),
                           ),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   Container(
                     decoration: BoxDecoration(
-                      color: Colors.greenAccent.withOpacity(0.2),
+                      color: const Color.fromARGB(255, 0, 0, 0).withOpacity(0.2),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Row(
@@ -188,7 +188,7 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
                       children: [
                         IconButton(
                           icon: const Icon(Icons.remove, size: 20),
-                          color: Colors.greenAccent,
+                          color: const Color.fromARGB(255, 0, 255, 34),
                           onPressed: () {
                             final songPath = _songs[_currentIndex!];
                             final currentScore = _songScores[songPath] ?? 0;
@@ -196,10 +196,10 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
                           },
                         ),
                         Text('${_songScores[_songs[_currentIndex!]] ?? 0}',
-                          style: const TextStyle(fontSize: 20, color: Colors.white)),
+                            style: const TextStyle(fontSize: 20, color: Colors.white)),
                         IconButton(
                           icon: const Icon(Icons.add, size: 20),
-                          color: Colors.greenAccent,
+                          color: const Color.fromARGB(255, 0, 255, 34),
                           onPressed: () {
                             final songPath = _songs[_currentIndex!];
                             final currentScore = _songScores[songPath] ?? 0;
@@ -219,137 +219,150 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
           if (snapshot.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
           }
-          
+
           if (snapshot.hasError || _songs.isEmpty) {
             return const Center(child: Text('No songs found in assets folder'));
           }
 
-          return Column(
+          return Stack(
             children: [
-              StreamBuilder<Duration?>(
-                stream: _audioPlayer.positionStream,
-                builder: (context, snapshot) {
-                  _position = snapshot.data ?? Duration.zero;
-                  return StreamBuilder<Duration?>(
-                    stream: _audioPlayer.durationStream,
+              // Background for the highlighted song
+              Container(
+                color: Colors.black, // Set the background color
+              ),
+              Column(
+                children: [
+                  StreamBuilder<Duration?>(
+                    stream: _audioPlayer.positionStream,
                     builder: (context, snapshot) {
-                      _duration = snapshot.data ?? Duration.zero;
-                      return Slider(
-                        min: 0,
-                        max: _duration.inSeconds.toDouble(),
-                        value: _position.inSeconds.toDouble(),
-                        onChanged: (value) async {
-                          await _audioPlayer.seek(Duration(seconds: value.toInt()));
+                      _position = snapshot.data ?? Duration.zero;
+                      return StreamBuilder<Duration?>(
+                        stream: _audioPlayer.durationStream,
+                        builder: (context, snapshot) {
+                          _duration = snapshot.data ?? Duration.zero;
+                          return Slider(
+                            min: 0,
+                            max: _duration.inSeconds.toDouble(),
+                            value: _position.inSeconds.toDouble(),
+                            onChanged: (value) async {
+                              await _audioPlayer.seek(Duration(seconds: value.toInt()));
+                            },
+                          );
                         },
                       );
                     },
-                  );
-                },
-              ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.repeat),
-                    color: _isLooped ? const Color.fromARGB(255, 0, 255, 8) : null,
-                    onPressed: () async {
-                      final newMode = _isLooped ? LoopMode.off : LoopMode.all;
-                      await _audioPlayer.setLoopMode(newMode);
-                    },
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.skip_previous, size: 40),
-                    onPressed: () => _audioPlayer.seekToPrevious(),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.repeat),
+                        color: _isLooped ? const Color.fromARGB(255, 0, 255, 8) : null,
+                        onPressed: () async {
+                          final newMode = _isLooped ? LoopMode.off : LoopMode.all;
+                          await _audioPlayer.setLoopMode(newMode);
+                        },
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.skip_previous, size: 40),
+                        onPressed: () => _audioPlayer.seekToPrevious(),
+                      ),
+                      IconButton(
+                        icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow, size: 50),
+                        onPressed: () async {
+                          if (_isPlaying) {
+                            await _audioPlayer.pause();
+                          } else {
+                            await _audioPlayer.play();
+                          }
+                        },
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.skip_next, size: 40),
+                        onPressed: () => _audioPlayer.seekToNext(),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.shuffle),
+                        color: _isShuffled ? const Color.fromARGB(255, 0, 255, 8) : null,
+                        onPressed: () async {
+                          await _audioPlayer.setShuffleModeEnabled(!_isShuffled);
+                        },
+                      ),
+                    ],
                   ),
-                  IconButton(
-                    icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow, size: 50),
-                    onPressed: () async {
-                      if (_isPlaying) {
-                        await _audioPlayer.pause();
-                      } else {
-                        await _audioPlayer.play();
-                      }
-                    },
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.skip_next, size: 40),
-                    onPressed: () => _audioPlayer.seekToNext(),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.shuffle),
-                    color: _isShuffled ? const Color.fromARGB(255, 0, 255, 8) : null,
-                    onPressed: () async {
-                      await _audioPlayer.setShuffleModeEnabled(!_isShuffled);
-                    },
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: _songs.length,
+                      itemBuilder: (context, index) {
+                        String songPath = _songs[index];
+                        int score = _songScores[songPath] ?? 0;
+                        return ListTile(
+                          tileColor: _currentIndex == index 
+                              ? Colors.greenAccent.withOpacity(0.1)
+                              : null,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                          title: Row(
+                            children: [
+                              Expanded(
+                                // color: const Color.fromARGB(157, 21, 255, 0),
+                                child: Text(
+                                  _getSongTitle(songPath),
+                                  style: TextStyle(
+                                    color: _currentIndex == index 
+                                        ? const Color.fromARGB(255, 0, 255, 34) 
+                                        : Colors.white,
+                                    fontWeight: _currentIndex == index 
+                                        ? FontWeight.bold 
+                                        : FontWeight.normal,
+                                  ),
+                                ),
+                              ),
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: const Color.fromARGB(0, 0, 255, 132),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Row(
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(Icons.remove, size: 18),
+                                      color: _currentIndex == index 
+                                        ? const Color.fromARGB(255, 0, 255, 34) 
+                                        : Colors.greenAccent,
+                                      onPressed: () { 
+                                        _updateScore(songPath, score - 1);
+                                      },
+                                    ),
+                                    Text(score.toString(),
+                                        style: const TextStyle(color: Colors.white)),
+                                    IconButton(
+                                      icon: const Icon(Icons.add, size: 18),
+                                      color: _currentIndex == index 
+                                        ? const Color.fromARGB(255, 0, 255, 34) 
+                                        : Colors.greenAccent,
+                                      onPressed: () { 
+                                        _updateScore(songPath, score + 1);
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          onTap: () async {
+                            if (_isPlaying) {
+                              await _audioPlayer.stop();
+                            }
+                            await _audioPlayer.seek(Duration.zero, index: index);
+                            await _audioPlayer.play();
+                          },
+                        );
+                      },
+                    ),
                   ),
                 ],
-              ),
-              Expanded(
-                child: ListView.builder(
-                  itemCount: _songs.length,
-                  itemBuilder: (context, index) {
-                    String songPath = _songs[index];
-                    int score = _songScores[songPath] ?? 0;
-                    return ListTile(
-                      tileColor: _currentIndex == index 
-                          ? Colors.greenAccent.withOpacity(0.1)
-                          : null,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(15),
-                      ),
-                      title: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              _getSongTitle(songPath),
-                              style: TextStyle(
-                                color: _currentIndex == index 
-                                    ? Colors.greenAccent 
-                                    : Colors.white,
-                                fontWeight: _currentIndex == index 
-                                    ? FontWeight.bold 
-                                    : FontWeight.normal,
-                              ),
-                            ),
-                          ),
-                          Container(
-                            decoration: BoxDecoration(
-                              color: Colors.greenAccent.withOpacity(0),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Row(
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.remove, size: 18),
-                                  color: Colors.greenAccent,
-                                  onPressed: () { 
-                                    _updateScore(songPath, score - 1);
-                                  },
-                                ),
-                                Text(score.toString(),
-                                    style: const TextStyle(color: Colors.white)),
-                                IconButton(
-                                  icon: const Icon(Icons.add, size: 18),
-                                  color: Colors.greenAccent,
-                                  onPressed: () { 
-                                    _updateScore(songPath, score + 1);
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      onTap: () async {
-                        if (_isPlaying) {
-                          await _audioPlayer.stop();
-                        }
-                        await _audioPlayer.seek(Duration.zero, index: index);
-                        await _audioPlayer.play();
-                      },
-                    );
-                  },
-                ),
               ),
             ],
           );
