@@ -209,46 +209,6 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
                       ],
                     ),
                   ),
-
-
-                  
-                  // // Title on the left
-                  // Text(
-                  //   _getSongTitle(_songs[_currentIndex!]),
-                  //   style: const TextStyle(fontSize: 22),
-                  // ),
-                  // // Score controls on the right
-                  // Row(
-                  //   mainAxisSize: MainAxisSize.min,
-                  //   children: [
-                  //     IconButton(
-                  //       icon: const Text('-', 
-                  //         style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                  //       padding: EdgeInsets.zero, // Reduce padding
-                  //       constraints: BoxConstraints(), // Remove button constraints
-                  //       onPressed: () {
-                  //         final songPath = _songs[_currentIndex!];
-                  //         final currentScore = _songScores[songPath] ?? 0;
-                  //         _updateScore(songPath, currentScore - 1);
-                  //       },
-                  //     ),
-                  //     Text(
-                  //       '${_songScores[_songs[_currentIndex!]] ?? 0}',
-                  //       style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w500),
-                  //     ),
-                  //     IconButton(
-                  //       icon: const Text('+', 
-                  //         style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                  //       padding: EdgeInsets.zero, // Reduce padding
-                  //       constraints: BoxConstraints(), // Remove button constraints
-                  //       onPressed: () {
-                  //         final songPath = _songs[_currentIndex!];
-                  //         final currentScore = _songScores[songPath] ?? 0;
-                  //         _updateScore(songPath, currentScore + 1);
-                  //       },
-                  //     ),
-                  //   ],
-                  // ),
                 ],
               )
             : const Text('Music Player', style: TextStyle(fontSize: 25)),
