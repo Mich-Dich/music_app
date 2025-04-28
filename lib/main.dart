@@ -32,7 +32,7 @@ class MyApp extends StatelessWidget {
             color: Colors.white,
           ),
           bodyLarge: const TextStyle(
-            fontSize: 12,
+            fontSize: 14,
             fontWeight: FontWeight.w300,
             color: Colors.white,
           ),
@@ -73,6 +73,7 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
   late SharedPreferences _prefs;
   Map<String, int> _songScores = {};
   bool _sortAscending = false;
+  double _dragValue = 0.0;
 
   @override
   void initState() {
@@ -292,7 +293,7 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
                 ],
               ),
               const SizedBox(height: 8),
-              _buildProgressBar(),
+              _buildSeekBar(),
               const SizedBox(height: 12),
               _buildPlayerControls(),
             ],
@@ -302,31 +303,30 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
     );
   }
 
-  Widget _buildProgressBar() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: StreamBuilder<Duration?>(
-        stream: _audioPlayer.positionStream,
-        builder: (context, snapshot) {
-          final position = snapshot.data ?? Duration.zero;
-          return StreamBuilder<Duration?>(
-            stream: _audioPlayer.durationStream,
-            builder: (context, snapshot) {
-              final duration = snapshot.data ?? Duration.zero;
-              return LinearProgressIndicator(
-                value: duration.inSeconds > 0 
-                    ? position.inSeconds / duration.inSeconds 
-                    : 0,
-                minHeight: 4,
-                backgroundColor: Colors.grey.withOpacity(0.2),
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  Theme.of(context).colorScheme.primary,
-                ),
-              );
-            },
-          );
-        },
-      ),
+  Widget _buildSeekBar() {
+    return StreamBuilder<Duration?>(
+      stream: _audioPlayer.durationStream,
+      builder: (context, snapDur) {
+        final duration = snapDur.data ?? Duration.zero;
+        return StreamBuilder<Duration>(
+          stream: _audioPlayer.positionStream,
+          builder: (context, snapPos) {
+            final position = snapPos.data ?? Duration.zero;
+            // update drag value when not dragging
+            _dragValue = position.inMilliseconds / (duration.inMilliseconds > 0 ? duration.inMilliseconds : 1);
+            return Slider(
+              value: _dragValue.clamp(0.0, 1.0),
+              onChanged: (value) {
+                setState(() => _dragValue = value);
+              },
+              onChangeEnd: (value) async {
+                final newPos = duration * value;
+                await _audioPlayer.seek(newPos);
+              },
+            );
+          },
+        );
+      },
     );
   }
 
@@ -452,7 +452,7 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
                 '${index + 1}',
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.primary,
-                  fontSize: 16,
+                  fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),
               ),
