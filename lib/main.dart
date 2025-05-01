@@ -1,10 +1,12 @@
+// ignore_for_file: curly_braces_in_flow_control_structures
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
-// import 'package:google_fonts/google_fonts.dart';
+import 'dart:math';
 import 'dart:convert';
 
 void main() => runApp(const MyApp());
@@ -22,7 +24,6 @@ class MyApp extends StatelessWidget {
           primary: Color(0xFF00FF5A),
           secondary: Color(0xFF00FF5A),
           surface: Color(0xFF1A1A1A),
-          background: Color(0xFF000000),
         ),
         textTheme: TextTheme(
           titleLarge: const TextStyle(
@@ -66,7 +67,7 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
   final ItemPositionsListener _itemPositionsListener = ItemPositionsListener.create();
   bool _isPlaying = false;
   bool _isShuffled = true;
-  bool _isLooped = true;
+  // bool _isLooped = true;
   late Future<List<String>> _songsFuture;
   List<String> _songs = [];
   int? _currentIndex;
@@ -74,6 +75,9 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
   Map<String, int> _songScores = {};
   bool _sortAscending = false;
   double _dragValue = 0.0;
+  final _rand = Random();
+  List<int> _weightedIndices = [];
+  List<int> _history = [];
 
   @override
   void initState() {
@@ -92,9 +96,10 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
     _audioPlayer.shuffleModeEnabledStream.listen((enabled) {
       setState(() => _isShuffled = enabled);
     });
-    _audioPlayer.loopModeStream.listen((mode) {
-      setState(() => _isLooped = mode == LoopMode.all);
-    });
+
+    if (_isShuffled)
+      _buildWeightedIndices();
+    _audioPlayer.setLoopMode(LoopMode.all);                     // just force looping
   }
 
   void _scrollToCurrentSong() {
@@ -106,6 +111,62 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
     );
   }
 
+  void _enableShuffleMode() {
+
+    _buildWeightedIndices();
+    _isShuffled = true;
+  }
+
+  void _buildWeightedIndices() {
+    _weightedIndices = [];
+    for (var i = 0; i < _songs.length; i++) {
+      final score = _songScores[_songs[i]] ?? 0;
+      for (var j = 0; j < score; j++) {               // add the index score-many times
+        _weightedIndices.add(i);
+      }
+    }
+    // Optionally fall back to uniform if all scores zero
+    if (_weightedIndices.isEmpty && _songs.isNotEmpty) {
+      _weightedIndices = List.generate(_songs.length, (i) => i);
+    }
+  }
+
+  Future<void> _playNext() async {
+    if (_songs.isEmpty) return;
+
+    int pick;
+    if (_isShuffled) {
+
+      int loopCounter = 0;
+      do {
+        pick = _weightedIndices[_rand.nextInt(_weightedIndices.length)];
+        loopCounter++;
+      } while (pick == _currentIndex && loopCounter < 100);
+
+      if (pick == _currentIndex) {                // if we failed to find a different one after 100 tries, just pick the next in list:
+        final current = _currentIndex ?? 0;
+        pick = (current + 1) < _songs.length ? current + 1 : 0;
+      }
+    } else {
+      final current = _currentIndex ?? 0;
+      pick = (current + 1) < _songs.length ? current + 1 : 0;
+    }
+
+    await _audioPlayer.seek(Duration.zero, index: pick);
+    await _audioPlayer.play();
+  }
+
+
+  Future<void> _playPrevious() async {
+  if (_history.length < 2) return;
+  // remove current from history
+  _history.removeLast();
+  final previous = _history.removeLast();
+  await _audioPlayer.seek(Duration.zero, index: previous);
+  await _audioPlayer.play();
+  }
+
+  /* functions for: _getSongTitle, _getSongArtist, _loadSongs, _loadScores, _saveScores, _updateScore, _initAudioSession, _setupPlaylist, _sortSongsByScore,  */
   String _getSongTitle(String filePath) {
     final fileName = filePath.split('/').last.replaceAll('.mp3', '');
     final parts = fileName.split('+');
@@ -171,7 +232,7 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
   }
 
   Future<void> _setupPlaylist() async {
-    await _audioPlayer.setShuffleModeEnabled(true);  // Add this
+    // await _audioPlayer.setShuffleModeEnabled(true);
     await _audioPlayer.setLoopMode(LoopMode.all);    // Changed from LoopMode.off
     await _audioPlayer.setAudioSource(
       ConcatenatingAudioSource(
@@ -337,12 +398,12 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
         _buildControlButton(
           icon: Icons.shuffle,
           isActive: _isShuffled,
-          onPressed: () => _audioPlayer.setShuffleModeEnabled(!_isShuffled),
+          onPressed: () => _enableShuffleMode(),
         ),
         _buildControlButton(
           icon: Icons.skip_previous,
           size: 36,
-          onPressed: () => _audioPlayer.seekToPrevious(),
+          onPressed: () => _playPrevious(),
         ),
         Container(
           decoration: BoxDecoration(
@@ -380,16 +441,16 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
         _buildControlButton(
           icon: Icons.skip_next,
           size: 36,
-          onPressed: () => _audioPlayer.seekToNext(),
+          onPressed: () => _playNext(),
         ),
-        _buildControlButton(
-          icon: Icons.repeat,
-          isActive: _isLooped,
-          onPressed: () async {
-            final newMode = _isLooped ? LoopMode.off : LoopMode.all;
-            await _audioPlayer.setLoopMode(newMode);
-          },
-        ),
+        // _buildControlButton(
+        //   icon: Icons.repeat,
+        //   isActive: _isLooped,
+        //   onPressed: () async {
+        //     final newMode = _isLooped ? LoopMode.off : LoopMode.all;
+        //     await _audioPlayer.setLoopMode(newMode);
+        //   },
+        // ),
       ],
     );
   }
