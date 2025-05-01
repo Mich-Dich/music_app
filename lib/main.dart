@@ -66,7 +66,6 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
   final ItemScrollController _itemScrollController = ItemScrollController();
   final ItemPositionsListener _itemPositionsListener = ItemPositionsListener.create();
   bool _isPlaying = false;
-  bool _isShuffled = true;
   // bool _isLooped = true;
   late Future<List<String>> _songsFuture;
   List<String> _songs = [];
@@ -79,27 +78,48 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
   List<int> _weightedIndices = [];
   List<int> _history = [];
 
+  Duration? _currentSongDuration;
+  bool _reachedEnd = false;
+
   @override
   void initState() {
     super.initState();
-    _songsFuture = _loadSongs();
     _initAudioSession();
-    _audioPlayer.currentIndexStream.listen((index) {
-      setState(() => _currentIndex = index);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scrollToCurrentSong();
-      });
+    _songsFuture = _loadSongs().then((songs) async {
+      await _sortSongsByScore();
+      return songs;
     });
+    
     _audioPlayer.playerStateStream.listen((state) {
       setState(() => _isPlaying = state.playing);
     });
-    _audioPlayer.shuffleModeEnabledStream.listen((enabled) {
-      setState(() => _isShuffled = enabled);
+
+    _audioPlayer.positionStream.listen((position) {
+      final duration = _audioPlayer.duration;
+      if (duration != null && _audioPlayer.playing) {
+        final remaining = duration - position;
+        if (remaining.inMilliseconds <= 100) { // 100ms threshold
+          _reachedEnd = true;
+        }
+      }
     });
 
-    if (_isShuffled)
-      _buildWeightedIndices();
-    _audioPlayer.setLoopMode(LoopMode.all);                     // just force looping
+    _audioPlayer.currentIndexStream.listen((index) {
+      if (_reachedEnd && index != null) {
+        print("Song finished naturally");
+        Future.microtask(() {_playNext();});        
+        _reachedEnd = false;
+      }
+      
+      setState(() => _currentIndex = index);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToCurrentSong();
+        _buildWeightedIndices();
+      });
+    });
+
+    _buildWeightedIndices();
+    _audioPlayer.setLoopMode(LoopMode.off);                     // just force looping
   }
 
   void _scrollToCurrentSong() {
@@ -111,43 +131,31 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
     );
   }
 
-  void _enableShuffleMode() {
-
-    _buildWeightedIndices();
-    _isShuffled = true;
-  }
-
   void _buildWeightedIndices() {
     _weightedIndices = [];
     for (var i = 0; i < _songs.length; i++) {
       final score = _songScores[_songs[i]] ?? 0;
-      for (var j = 0; j < score; j++) {               // add the index score-many times
+      for (var j = 0; j < score; j++)
         _weightedIndices.add(i);
-      }
     }
-    // Optionally fall back to uniform if all scores zero
-    if (_weightedIndices.isEmpty && _songs.isNotEmpty) {
+      
+    if (_weightedIndices.isEmpty && _songs.isNotEmpty)
       _weightedIndices = List.generate(_songs.length, (i) => i);
-    }
   }
 
   Future<void> _playNext() async {
-    if (_songs.isEmpty) return;
+    
+    if (_songs.isEmpty)
+      return;
 
     int pick;
-    if (_isShuffled) {
+    int loopCounter = 0;
+    do {
+      pick = _weightedIndices[_rand.nextInt(_weightedIndices.length)];
+      loopCounter++;
+    } while (pick == _currentIndex && loopCounter < 100);
 
-      int loopCounter = 0;
-      do {
-        pick = _weightedIndices[_rand.nextInt(_weightedIndices.length)];
-        loopCounter++;
-      } while (pick == _currentIndex && loopCounter < 100);
-
-      if (pick == _currentIndex) {                // if we failed to find a different one after 100 tries, just pick the next in list:
-        final current = _currentIndex ?? 0;
-        pick = (current + 1) < _songs.length ? current + 1 : 0;
-      }
-    } else {
+    if (pick == _currentIndex) {                // if we failed to find a different one after 100 tries, just pick the next in list:
       final current = _currentIndex ?? 0;
       pick = (current + 1) < _songs.length ? current + 1 : 0;
     }
@@ -156,14 +164,15 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
     await _audioPlayer.play();
   }
 
-
   Future<void> _playPrevious() async {
-  if (_history.length < 2) return;
-  // remove current from history
-  _history.removeLast();
-  final previous = _history.removeLast();
-  await _audioPlayer.seek(Duration.zero, index: previous);
-  await _audioPlayer.play();
+
+    if (_history.length < 2)
+      return;
+
+    _history.removeLast();
+    final previous = _history.removeLast();
+    await _audioPlayer.seek(Duration.zero, index: previous);
+    await _audioPlayer.play();
   }
 
   /* functions for: _getSongTitle, _getSongArtist, _loadSongs, _loadScores, _saveScores, _updateScore, _initAudioSession, _setupPlaylist, _sortSongsByScore,  */
@@ -242,8 +251,6 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
   }
 
   Future<void> _sortSongsByScore() async {
-    // Toggle the sort order each time the button is pressed.
-    _sortAscending = !_sortAscending;
 
     String? currentSongPath;
     bool wasPlaying = _isPlaying;
@@ -257,10 +264,7 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
     sortedSongs.sort((a, b) {
       int scoreA = _songScores[a] ?? 0;
       int scoreB = _songScores[b] ?? 0;
-      // Use ascending or descending based on the toggle:
-      return _sortAscending 
-          ? scoreA.compareTo(scoreB)
-          : scoreB.compareTo(scoreA);
+      return scoreB.compareTo(scoreA);
     });
 
     setState(() {
@@ -346,11 +350,6 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
                             ),
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.sort),
-                    color: Theme.of(context).colorScheme.primary,
-                    onPressed: _sortSongsByScore,
-                  ),
                 ],
               ),
               const SizedBox(height: 8),
@@ -396,11 +395,6 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
         _buildControlButton(
-          icon: Icons.shuffle,
-          isActive: _isShuffled,
-          onPressed: () => _enableShuffleMode(),
-        ),
-        _buildControlButton(
           icon: Icons.skip_previous,
           size: 36,
           onPressed: () => _playPrevious(),
@@ -443,14 +437,11 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
           size: 36,
           onPressed: () => _playNext(),
         ),
-        // _buildControlButton(
-        //   icon: Icons.repeat,
-        //   isActive: _isLooped,
-        //   onPressed: () async {
-        //     final newMode = _isLooped ? LoopMode.off : LoopMode.all;
-        //     await _audioPlayer.setLoopMode(newMode);
-        //   },
-        // ),
+        IconButton(
+          icon: const Icon(Icons.sort),
+          color: Theme.of(context).colorScheme.primary,
+          onPressed: _sortSongsByScore,
+        ),
       ],
     );
   }
@@ -575,35 +566,6 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
             icon: const Icon(Icons.add, size: 18),
             color: Theme.of(context).colorScheme.primary,
             onPressed: () => _updateScore(songPath, score + 1),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildScoreControls() {
-    return Container(
-      // decoration: BoxDecoration(
-      //   color: Colors.black.withOpacity(0.3),
-      //   borderRadius: BorderRadius.circular(20),
-      //   border: Border.all(
-      //     color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
-      //   ),
-      // ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            icon: const Icon(Icons.sort),
-            color: Theme.of(context).colorScheme.primary,
-            onPressed: _sortSongsByScore,
-          ),
-          Text(
-            'Score',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.primary,
-              fontWeight: FontWeight.w600,
-            ),
           ),
         ],
       ),
