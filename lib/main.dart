@@ -54,6 +54,7 @@ class MyApp extends StatelessWidget {
   }
 }
 
+
 class _ListItem {
   final bool isHeader;
   final int score;
@@ -74,6 +75,7 @@ class MusicPlayerScreen extends StatefulWidget {
   @override
   State<MusicPlayerScreen> createState() => MusicPlayerScreenState();
 }
+
 
 class MusicPlayerScreenState extends State<MusicPlayerScreen> {
   final AudioPlayer _audioPlayer = AudioPlayer();
