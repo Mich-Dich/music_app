@@ -54,6 +54,20 @@ class MyApp extends StatelessWidget {
   }
 }
 
+class _ListItem {
+  final bool isHeader;
+  final int score;
+  final String? songPath;
+
+  _ListItem.header(this.score)
+      : isHeader = true,
+        songPath = null;
+
+  _ListItem.song(this.songPath, this.score)
+      : isHeader = false;
+}
+
+
 class MusicPlayerScreen extends StatefulWidget {
   const MusicPlayerScreen({super.key});
 
@@ -72,13 +86,10 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
   int? _currentIndex;
   late SharedPreferences _prefs;
   Map<String, int> _songScores = {};
-  bool _sortAscending = false;
   double _dragValue = 0.0;
   final _rand = Random();
   List<int> _weightedIndices = [];
   List<int> _history = [];
-
-  Duration? _currentSongDuration;
   bool _reachedEnd = false;
 
   @override
@@ -106,7 +117,6 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
 
     _audioPlayer.currentIndexStream.listen((index) {
       if (_reachedEnd && index != null) {
-        print("Song finished naturally");
         Future.microtask(() {_playNext();});        
         _reachedEnd = false;
       }
@@ -119,17 +129,25 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
     });
 
     _buildWeightedIndices();
-    _audioPlayer.setLoopMode(LoopMode.off);                     // just force looping
+    _audioPlayer.setLoopMode(LoopMode.off);
   }
 
-  void _scrollToCurrentSong() {
-    if (_currentIndex == null) return;
-    _itemScrollController.scrollTo(
-      index: _currentIndex!,
-      duration: const Duration(milliseconds: 300),
-      alignment: 0.4,
-    );
-  }
+void _scrollToCurrentSong() {
+
+  if (_currentIndex == null)
+    return;
+
+  final items = _buildGroupedList();
+  final currentPath = _songs[_currentIndex!];
+  final targetIndex = items.indexWhere((it) => !it.isHeader && it.songPath == currentPath );
+  final idx = targetIndex != -1 ? targetIndex : items.indexWhere((it) => !it.isHeader );
+  _itemScrollController.scrollTo(
+    index: idx,
+    duration: const Duration(milliseconds: 300),
+    alignment: 0.4,
+  );
+}
+
 
   void _buildWeightedIndices() {
     _weightedIndices = [];
@@ -175,7 +193,6 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
     await _audioPlayer.play();
   }
 
-  /* functions for: _getSongTitle, _getSongArtist, _loadSongs, _loadScores, _saveScores, _updateScore, _initAudioSession, _setupPlaylist, _sortSongsByScore,  */
   String _getSongTitle(String filePath) {
     final fileName = filePath.split('/').last.replaceAll('.mp3', '');
     final parts = fileName.split('+');
@@ -216,9 +233,20 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
     _prefs = await SharedPreferences.getInstance();
     String? scoresJson = _prefs.getString('songScores');
     if (scoresJson != null) {
-      setState(() {
-        _songScores = Map<String, int>.from(json.decode(scoresJson));
-      });
+      _songScores = Map<String, int>.from(json.decode(scoresJson));
+    }
+
+    // Assign a default score of 1 to songs without a score
+    bool updated = false;
+    for (final song in _songs) {
+      if (!_songScores.containsKey(song)) {
+        _songScores[song] = 1;
+        updated = true;
+      }
+    }
+
+    if (updated) {
+      await _saveScores();
     }
   }
 
@@ -291,6 +319,134 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
     setState(() {});
   }
 
+  List<_ListItem> _buildGroupedList() {
+    // group songs by score
+    final Map<int, List<String>> byScore = { for (var s=0; s<=9; s++) s: [] };
+    for (var song in _songs) {
+      final score = _songScores[song] ?? 0;
+      byScore[score]!.add(song);
+    }
+
+    // flatten: highest score first
+    final List<_ListItem> items = [];
+    for (int score = 9; score >= 0; score--) {
+      items.add(_ListItem.header(score));
+      for (var song in byScore[score]!) {
+        items.add(_ListItem.song(song, score));
+      }
+    }
+    return items;
+  }
+
+  void _openSearchPopup() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        String query = '';
+        List<String> matches = [];
+
+        return StatefulBuilder(
+          builder: (context, setState) {
+            void _filterSongs(String input) {
+              final lower = input.toLowerCase();
+              final filtered = _songs.where((path) {
+                final title = _getSongTitle(path).toLowerCase();
+                final artist = _getSongArtist(path).toLowerCase();
+                return title.contains(lower) || artist.contains(lower);
+              }).toList();
+              setState(() {
+                query = input;
+                matches = filtered;
+              });
+            }
+
+            return AlertDialog(
+              backgroundColor: Theme.of(context).colorScheme.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              title: const Text('Search Songs'),
+              content: SizedBox(
+                width: double.maxFinite,
+                height: 350,
+                child: Column(
+                  children: [
+                    TextField(
+                      decoration: InputDecoration(
+                        hintText: 'Type song title or artist...',
+                        prefixIcon: const Icon(Icons.search),
+                        filled: true,
+                        fillColor: Colors.white12,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                      onChanged: _filterSongs,
+                    ),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: matches.isEmpty && query.isNotEmpty
+                          ? const Center(
+                              child: Text(
+                                'No matches found',
+                                style: TextStyle(color: Colors.white60),
+                              ),
+                            )
+                          : ListView.separated(
+                              itemCount: matches.length,
+                              separatorBuilder: (context, index) => const Divider(
+                                color: Colors.white24,
+                                height: 1,
+                              ),
+                              itemBuilder: (context, i) {
+                                final path = matches[i];
+                                return ListTile(
+                                  leading: const Icon(
+                                    Icons.music_note,
+                                    color: Color(0xFF00FF5A),
+                                  ),
+                                  title: Text(
+                                    _getSongTitle(path),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  subtitle: Text(
+                                    _getSongArtist(path),
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.white70,
+                                    ),
+                                  ),
+                                  onTap: () async {
+                                    final newIndex = _songs.indexOf(path);
+                                    Navigator.of(context).pop();
+                                    await _audioPlayer.seek(
+                                      Duration.zero,
+                                      index: newIndex,
+                                    );
+                                    await _audioPlayer.play();
+                                  },
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  child: const Text('Close'),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
   @override
   void dispose() {
     _audioPlayer.dispose();
@@ -394,6 +550,11 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
+        IconButton(
+          icon: const Icon(Icons.search),
+          color: Theme.of(context).colorScheme.primary,
+          onPressed: _openSearchPopup,
+        ),
         _buildControlButton(
           icon: Icons.skip_previous,
           size: 36,
@@ -471,76 +632,98 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
       ),
     );
   }
-
+  
   Widget _buildSongList() {
+    final items = _buildGroupedList();
+
     return ScrollablePositionedList.builder(
       itemScrollController: _itemScrollController,
       itemPositionsListener: _itemPositionsListener,
       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 10),
-      itemCount: _songs.length,
-      itemBuilder: (context, index) {
-        final songPath = _songs[index];
-        final score = _songScores[songPath] ?? 0;
-        return Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(5),
-            border: Border.all(
-              color: _currentIndex == index
-                  ? Theme.of(context).colorScheme.primary.withOpacity(0.3)
-                  : Colors.transparent,
-            ),
-          ),
-          child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 2),
-            leading: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(5),
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                '${index + 1}',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.primary,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            title: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
+      itemCount: items.length,
+      itemBuilder: (context, idx) {
+        final item = items[idx];
+        if (item.isHeader) {
+          // A divider + score label
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
               children: [
+                Expanded(child: Divider(color: Colors.white24)),
+                const SizedBox(width: 8),
                 Text(
-                  _getSongTitle(songPath),
+                  'Score ${item.score}',
                   style: TextStyle(
-                    color: _currentIndex == index
-                        ? Theme.of(context).colorScheme.primary
-                        : Colors.white,
-                    fontWeight: _currentIndex == index 
-                        ? FontWeight.w600 
-                        : FontWeight.normal,
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-                Text(
-                  _getSongArtist(songPath),
-                  style: Theme.of(context).textTheme.bodyLarge!.copyWith(
-                        fontSize: 12,
-                        color: Colors.grey.withOpacity(0.8),
-                      ),
-                ),
+                const SizedBox(width: 8),
+                Expanded(child: Divider(color: Colors.white24)),
               ],
             ),
-            trailing: _buildScoreBadge(songPath, score),
-            onTap: () async {
-              if (_isPlaying) await _audioPlayer.stop();
-              await _audioPlayer.seek(Duration.zero, index: index);
-              await _audioPlayer.play();
-            },
-          ),
-        );
+          );
+        } else {
+          // Find the real index in _songs so that tapping/scrolling still works
+          final songIndex = _songs.indexOf(item.songPath!);
+          return Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(5),
+              border: Border.all(
+                color: _currentIndex == songIndex
+                    ? Theme.of(context).colorScheme.primary.withOpacity(0.3)
+                    : Colors.transparent,
+              ),
+            ),
+            child: ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 2),
+              leading: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(5),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  '${songIndex + 1}',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _getSongTitle(item.songPath!),
+                    style: TextStyle(
+                      color: _currentIndex == songIndex
+                          ? Theme.of(context).colorScheme.primary
+                          : Colors.white,
+                      fontWeight: _currentIndex == songIndex
+                          ? FontWeight.w600
+                          : FontWeight.normal,
+                    ),
+                  ),
+                  Text(
+                    _getSongArtist(item.songPath!),
+                    style: Theme.of(context).textTheme.bodyLarge!
+                        .copyWith(fontSize: 12, color: Colors.grey.withOpacity(0.8)),
+                  ),
+                ],
+              ),
+              trailing: _buildScoreBadge(item.songPath!, item.score),
+              onTap: () async {
+                if (_isPlaying) await _audioPlayer.stop();
+                await _audioPlayer.seek(Duration.zero, index: songIndex);
+                await _audioPlayer.play();
+              },
+            ),
+          );
+        }
       },
     );
   }
