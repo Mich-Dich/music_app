@@ -132,22 +132,21 @@ class MusicPlayerScreenState extends State<MusicPlayerScreen> {
     _audioPlayer.setLoopMode(LoopMode.off);
   }
 
-void _scrollToCurrentSong() {
+  void _scrollToCurrentSong() {
 
-  if (_currentIndex == null)
-    return;
+    if (_currentIndex == null)
+      return;
 
-  final items = _buildGroupedList();
-  final currentPath = _songs[_currentIndex!];
-  final targetIndex = items.indexWhere((it) => !it.isHeader && it.songPath == currentPath );
-  final idx = targetIndex != -1 ? targetIndex : items.indexWhere((it) => !it.isHeader );
-  _itemScrollController.scrollTo(
-    index: idx,
-    duration: const Duration(milliseconds: 300),
-    alignment: 0.4,
-  );
-}
-
+    final items = _buildGroupedList();
+    final currentPath = _songs[_currentIndex!];
+    final targetIndex = items.indexWhere((it) => !it.isHeader && it.songPath == currentPath );
+    final idx = targetIndex != -1 ? targetIndex : items.indexWhere((it) => !it.isHeader );
+    _itemScrollController.scrollTo(
+      index: idx,
+      duration: const Duration(milliseconds: 300),
+      alignment: 0.4,
+    );
+  }
 
   void _buildWeightedIndices() {
     _weightedIndices = [];
@@ -159,6 +158,14 @@ void _scrollToCurrentSong() {
       
     if (_weightedIndices.isEmpty && _songs.isNotEmpty)
       _weightedIndices = List.generate(_songs.length, (i) => i);
+  }
+
+  Future<void> _playTrack(int newIndex, { bool addToHistory = true }) async {
+    if (_currentIndex != null && addToHistory)
+      _history.add(_currentIndex!);
+
+    await _audioPlayer.seek(Duration.zero, index: newIndex);
+    await _audioPlayer.play();
   }
 
   Future<void> _playNext() async {
@@ -178,19 +185,21 @@ void _scrollToCurrentSong() {
       pick = (current + 1) < _songs.length ? current + 1 : 0;
     }
 
-    await _audioPlayer.seek(Duration.zero, index: pick);
-    await _audioPlayer.play();
+    await _playTrack(pick);
   }
 
-  Future<void> _playPrevious() async {
+  Future<void> _onPreviousPressed() async {
 
-    if (_history.length < 2)
-      return;
+    final pos = _audioPlayer.position;
+    if (pos.inSeconds > 5) {
+      await _audioPlayer.seek(Duration.zero);
 
-    _history.removeLast();
-    final previous = _history.removeLast();
-    await _audioPlayer.seek(Duration.zero, index: previous);
-    await _audioPlayer.play();
+    } else {
+      if (_history.isNotEmpty) {
+        final prev = _history.removeLast();
+        await _playTrack(prev, addToHistory: false);
+      }
+    }
   }
 
   String _getSongTitle(String filePath) {
@@ -558,7 +567,7 @@ void _scrollToCurrentSong() {
         _buildControlButton(
           icon: Icons.skip_previous,
           size: 36,
-          onPressed: () => _playPrevious(),
+          onPressed: _onPreviousPressed,
         ),
         Container(
           decoration: BoxDecoration(
@@ -718,8 +727,9 @@ void _scrollToCurrentSong() {
               trailing: _buildScoreBadge(item.songPath!, item.score),
               onTap: () async {
                 if (_isPlaying) await _audioPlayer.stop();
-                await _audioPlayer.seek(Duration.zero, index: songIndex);
-                await _audioPlayer.play();
+                // await _audioPlayer.seek(Duration.zero, index: songIndex);
+                // await _audioPlayer.play();
+                await _playTrack(songIndex);
               },
             ),
           );
